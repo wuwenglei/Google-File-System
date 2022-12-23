@@ -40,7 +40,7 @@ public class Master {
         throw new IndexOutOfBoundsException("Exceed chunkserver limit: " + String.valueOf(chunkserverLimit));
     }
 
-    public static synchronized boolean unregisterChunkserver(int chunkserverID) {
+    public static synchronized boolean unregisterChunkserver(int chunkserverID) { // TODO: handle also the connectedChunkServer (maybe not, see ChunkServerReceiver - unregister() to coordinate); throw exception if the input was not registeded.
         return registeredChunkserver.remove(chunkserverID);
     }
 
@@ -297,7 +297,7 @@ public class Master {
                                 int version = Integer.valueOf(chunks[j + 1]);
                                 Chunk chk = chunkInfo.getOrDefault(handle, new Chunk(handle, version));
                                 chk.addReplicaLocation(chunkserverIDs.get(i)); // Do I need to check boolean return value?
-                                if (version < chk.getVersion()) {
+                                if (version < chk.getVersion()) { // See paper 4.5, may need to update use of version in other codes
                                     // Send update to low version chunkserver, if failed remove from replica locations
                                 } else if (version > chk.getVersion()) {
                                     // Update chk, and send send update to Send update to low version chunkserver, if failed remove from replica locations

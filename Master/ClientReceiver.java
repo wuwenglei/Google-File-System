@@ -76,7 +76,7 @@ public class ClientReceiver implements Runnable {
 
     private String create(String[] message) { // Create request: commandID, namespace, size
         String reply;
-        // TODO: Check unlock: finished transmission; Reply message: need size or handle or both?; load balancing
+        // TODO: Check unlock: finished transmission; load balancing; lease
         if (message.length < 3) {
             reply = "444 Create request (0) format is invalid!";
         } else if (Master.namespace.containsKey(message[1])) {
@@ -95,32 +95,96 @@ public class ClientReceiver implements Runnable {
             while (sizeRemaining > 0) {
                 int usedSize = sizeRemaining > Chunk.SIZE ? Chunk.SIZE : (int) sizeRemaining;
                 Chunk chunk = new Chunk(Master.incrementChunkHandle());
+                chunk.addOccupiedSize(usedSize);
                 chunks.add(chunk);
                 Master.chunkInfo.put(chunk.getHandle(), chunk);
+                ReplicaBalancer.assignReplicaLocationsToChunk(chunk);
+                Set<Integer> chunkserverIDs = chunk.getReplicaLocations();
                 sizeRemaining -= usedSize;
                 sb.append(' ');
                 sb.append(chunk.getHandle());
+                sb.append(' ');
+                sb.append(usedSize);
+                sb.append(' ');
+                sb.append(chunkserverIDs.size());
+                // TODO: reply primary chunk server ID
+
+                chunkserverIDs.forEach(chunkserverID -> {
+                    NetAddress netAddress = Master.connectedChunkServers.get(chunkserverID);
+                    sb.append(' ');
+                    sb.append(chunkserverID);
+                    sb.append(' ');
+                    sb.append(netAddress.toString());
+                });
             }
-            reply = sb.toString(); // status handle handle handle ...
+            reply = sb.toString(); // status handle size replicaCount chunkserverID netAddress chunkserverID netAddress ... handle size replicaCount chunkserverID netAddress chunkserverID netAddress ...
         }
         return reply;
     }
 
-    private String delete(String[] message) { // Delete request
+    private String delete(String[] message) { // Delete request // See paper 4.4; consider lock and lease
         String reply;
 
         return reply;
     }
 
-    private String read(String[] message) { // Read request
+    private String read(String[] message) { // Read request // See paper 2.4; consider lock and lease
         String reply;
 
         return reply;
     }
 
-    private String write(String[] message) { // Write request
+    private String write(String[] message) { // Write request: commandID, namespace, size
         String reply;
+        // TODO: Check lock & unlock: finished transmission; load balancing; lease
+        if (message.length < 3) {
+            reply = "444 Write request (3) format is invalid!";
+        } else if (! Master.namespace.containsKey(message[1])) {
+            reply = "444 File does not exists: " + message[1];
+        } else {
+            List<Name> names = Master.getNameInstancesOfPath(message[1]);
+            Name name = names.get(names.size() - 1);
+            name.readWriteLock.writeLock().lock(); // TODO: Or tryLock?
+            for (int i = names.size() - 2; i >= 0; i--) {
+                names.get(i).readWriteLock.readLock().lock();
+            }
+            List<Chunk> chunks = Master.mapping.get(name);
+            StringBuilder sb = new StringBuilder("666");
+            long sizeRemaining = Long.parseLong(message[2]);
+            while (sizeRemaining > 0) {
+                int usedSize;
+                Chunk chunk;
+                if (chunks.get(chunks.size() - 1).getOccupiedSize() < Chunk.SIZE) {
+                    usedSize = Chunk.SIZE - chunks.get(chunks.size() - 1).getOccupiedSize();
+                    chunk = chunks.get(chunks.size() - 1);
+                } else {
+                    usedSize = sizeRemaining > Chunk.SIZE ? Chunk.SIZE : (int) sizeRemaining;
+                    chunk = new Chunk(Master.incrementChunkHandle());
+                    chunks.add(chunk);
+                    Master.chunkInfo.put(chunk.getHandle(), chunk);
+                    ReplicaBalancer.assignReplicaLocationsToChunk(chunk);
+                }
+                chunk.addOccupiedSize(usedSize);
+                Set<Integer> chunkserverIDs = chunk.getReplicaLocations();
+                sizeRemaining -= usedSize;
+                sb.append(' ');
+                sb.append(chunk.getHandle());
+                sb.append(' ');
+                sb.append(usedSize);
+                sb.append(' ');
+                sb.append(chunkserverIDs.size());
+                // TODO: reply primary chunk server ID
 
+                chunkserverIDs.forEach(chunkserverID -> {
+                    NetAddress netAddress = Master.connectedChunkServers.get(chunkserverID);
+                    sb.append(' ');
+                    sb.append(chunkserverID);
+                    sb.append(' ');
+                    sb.append(netAddress.toString());
+                });
+            }
+            reply = sb.toString(); // status handle size replicaCount chunkserverID netAddress chunkserverID netAddress ... handle size replicaCount chunkserverID netAddress chunkserverID netAddress ...
+        }
         return reply;
     }
 

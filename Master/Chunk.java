@@ -5,9 +5,9 @@ public class Chunk {
     private final long HANDLE;
     private int version;
     private int occupiedSize;
-    private Map<Name, Integer> fileSizes;
+    private Map<Name, Integer> fileSizes; // may be deleted later
     private Set<Integer> replicaLocations;
-    private int totalFileSize;
+    private int totalFileSize; // may be deleted later
     private Integer lease;
 
     public Chunk(long handle) {
@@ -38,6 +38,16 @@ public class Chunk {
 
     public int getOccupiedSize() {
         return occupiedSize;
+    }
+
+    public synchronized void addOccupiedSize(int occupiedSize) {
+        if (this.occupiedSize + occupiedSize > Chunk.SIZE)
+            throw new IllegalArgumentException("Maximum chunk size reached!");
+        this.occupiedSize += occupiedSize;
+    }
+
+    public Set<Integer> getReplicaLocations() {
+        return replicaLocations;
     }
 
     public boolean addReplicaLocation(int chunkserverID) {
